@@ -41,29 +41,42 @@ def scrape_gmaps(city: str, sector: str):
             browser.close()
             return
         
-        print("[+] Liste aşağı kaydırılıyor (Maksimum 50 öğe için ayarlandı)...")
+        print("[+] Liste aşağı kaydırılıyor (Maksimum 400 öğe için ayarlandı)...")
         previously_counted = 0
+        scroll_attempts = 0
+        
         while True:
             # Sayfanın biraz veri yüklemesini bekle
             page.wait_for_timeout(2000)
             
+            # Kaydırma işlemi için feed elementini bul
+            feed = page.locator('div[role="feed"]')
+            if feed.count() > 0:
+                feed.evaluate("el => el.scrollTop = el.scrollHeight")
+            else:
+                # Yedek kaydırma yöntemi
+                elements = page.locator('a[href*="https://www.google.com/maps/place/"]').all()
+                if len(elements) > 0:
+                    elements[-1].scroll_into_view_if_needed()
+                    
             elements = page.locator('a[href*="https://www.google.com/maps/place/"]').all()
             
-            if len(elements) > 0:
-                # Son elemana gidip aşağı kaydırmasını sağla
-                elements[-1].scroll_into_view_if_needed()
-                
-            # Listenin sonuna indik mi kontrol et, veya eleman sayısı değişmedi mi
+            # Listenin sonuna indik mi kontrol et
             end_warning = page.locator("text=Listenin sonuna ulaştınız")
-            if end_warning.count() > 0 or len(elements) == previously_counted:
-                page.wait_for_timeout(3000) # Son bir yüklenme şansı
-                new_elements = page.locator('a[href*="https://www.google.com/maps/place/"]').all()
-                if len(new_elements) == previously_counted:
+            if end_warning.count() > 0:
+                break
+                
+            if len(elements) == previously_counted:
+                scroll_attempts += 1
+                page.wait_for_timeout(2000) # Bekleyip tekrar dene
+                if scroll_attempts >= 3:
                     break
+            else:
+                scroll_attempts = 0
             
             previously_counted = len(elements)
-            # Kısa sürmesi için ilk 50 sonucu alacağız, istenirse burası arttırılabilir.
-            if previously_counted >= 50:
+            # En az 20 sayfa demek ortalama 400 sonuca denk gelir
+            if previously_counted >= 400:
                 break
         
         # Tüm linkleri topla
